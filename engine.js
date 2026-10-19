@@ -4,8 +4,10 @@
 const PERIODS=['Mesolithic–Neolithic','Neolithic','Neolithic–Early Bronze Age','Late Bronze Age','Late Bronze Age–Early Iron Age','Early Iron Age','Early Iron Age–Late Iron Age','Late Iron Age','Late Iron Age–Viking Age','Viking Age','Viking Age–Medieval','Medieval'];
 const COLORS=['#315f54','#d5a55e','#7791a3','#b97962','#8272a8','#88a568','#d289a0','#698b87','#bd9b71','#6b7a92','#94a4aa','#9a766c'];
 const aliases=[
- [/^(ovis\s*aries|ovis\s*sp\.?|ovis|sheep|f[aå]r)$/i,'Sheep'],
- [/^(capra\s*hircus|capra\s*sp\.?|capra|goat|ged)$/i,'Goat'],
+ [/^(ovis\s*aries|sheep|f[aå]r)$/i,'Sheep'],
+ [/^(ovis\s*sp\.?|ovis)$/i,'Ovis sp.'],
+ [/^(capra\s*hircus|goat|ged)$/i,'Goat'],
+ [/^(capra\s*sp\.?|capra)$/i,'Capra sp.'],
  [/^(ovis\s*\/\s*capra|capra\s*\/\s*ovis|sheep\s*\/\s*goat|sheep[- ]goat|goat\s*\/\s*sheep|ovicapr(?:ines?)?|f[aå]r\s*\/\s*ged)$/i,'Sheep/goat'],
  [/^(bos\s*taurus|bos\s*sp\.?|bos|cattle|cow|domestic cattle|kv[aæ]g)$/i,'Cattle'],
  [/^(sus\s*domesticus|sus\s*scrofa\s*domesticus|pig|domestic pig|svin)$/i,'Pig'],
@@ -43,7 +45,44 @@ function aggregate(units,group,mode='pooled',denominator='all',taxa=[],periodOrd
  return {name,sums,total:totalAll,totalSelected,units:groupUnits.length,pct};});if(group==='period'){const ordered=orderPeriods(out.map(v=>v.name),periodOrder,rows);out.sort((a,b)=>ordered.indexOf(a.name)-ordered.indexOf(b.name));}else out.sort((a,b)=>b.total-a.total||a.name.localeCompare(b.name));return out;}
 function ratio(units,group,a,b,method='pooled',measure='share',periodOrder=PERIODS,rows=[]){const groups=new Map();for(const u of units){const name=group==='site'?u.site:group==='assemblage'?`${u.site}${u.assemblage?' · '+u.assemblage:u.context?' · '+u.context:''}`:u[group]||'Not specified';if(!groups.has(name))groups.set(name,[]);groups.get(name).push(u)}let out=[...groups].map(([name,g])=>{let A=g.reduce((sum,u)=>sum+(u.counts[a]||0),0),B=g.reduce((sum,u)=>sum+(u.counts[b]||0),0);const val=(x,y)=>measure==='share'?((x+y)?100*x/(x+y):null):y?x/y:null;const pieces=g.map(u=>val(u.counts[a]||0,u.counts[b]||0)).filter(v=>v!==null);const value=method==='siteMean'?(pieces.length?pieces.reduce((x,y)=>x+y,0)/pieces.length:null):val(A,B);return {name,value,A,B,n:g.length};});if(group==='period'){const ord=orderPeriods(out.map(x=>x.name),periodOrder,rows);out.sort((a,b)=>ord.indexOf(a.name)-ord.indexOf(b.name));}else out.sort((a,b)=>b.A+b.B-(a.A+a.B));return out;}
 function timeSeries(units,by,comparison,taxa,method,denom,periodOrder=PERIODS,rows=[]){const periods=orderPeriods(units.map(u=>u.period),periodOrder,rows);let keys=by==='taxon'?taxa:[...new Set(units.map(u=>u[by]))].sort();const data=periods.map(period=>{const sub=units.filter(u=>u.period===period);const entry={period};if(by==='taxon'){const row=aggregate(sub,'period',method,denom,taxa,periodOrder,rows)[0];keys.forEach(k=>entry[k]=row?.pct[k]??null);}else{for(const k of keys){const matching=sub.filter(u=>u[by]===k);if(!matching.length){entry[k]=null;continue}const g=aggregate(matching,'period',method,denom,taxa,periodOrder,rows)[0];entry[k]=g?.pct[comparison]??null;}}return entry});return {keys,data};}
+
+/* Independently filtered archaeological cohorts, retaining NISP provenance. */
+const FACETS=['country','region','period','site','assemblage','context'];
+function matchCohort(row,filters={}){return FACETS.every(field=>!Array.isArray(filters[field])||filters[field].length===0||filters[field].includes(String(row[field]||'')));}
+function cohortRows(rows,filters={}){return rows.filter(row=>matchCohort(row,filters));}
+function analyzeCohorts(rows,cohorts,settings={}){
+ const taxa=[...new Set(settings.taxa||[])],aTaxa=[...new Set(settings.ratioA||[])],bTaxa=[...new Set(settings.ratioB||[])];
+ const method=settings.method==='siteMean'?'siteMean':'pooled';
+ const denominator=settings.denominator==='selected'?'selected':'all';
+ const measure=settings.ratioMeasure==='ratio'?'ratio':'share';
+ const results=[];
+ for(const cohort of cohorts){
+  const subset=cohortRows(rows,cohort.filters||{}),units=unitize(subset),sums={};
+  for(const unit of units)for(const [taxon,n] of Object.entries(unit.counts))sums[taxon]=(sums[taxon]||0)+n;
+  const total=units.reduce((n,u)=>n+u.total,0);
+  const selectedTotal=taxa.reduce((n,t)=>n+(sums[t]||0),0);
+  const pct={};const contributors={};
+  for(const t of taxa){
+   const valid=[];
+   for(const u of units){const d=denominator==='selected'?taxa.reduce((sum,k)=>sum+(u.counts[k]||0),0):u.total;
+    if(d>0)valid.push(100*(u.counts[t]||0)/d);
+   }
+   contributors[t]=valid.length;
+   pct[t]=method==='siteMean'?(valid.length?valid.reduce((x,y)=>x+y,0)/valid.length:null):((denominator==='selected'?selectedTotal:total)>0?100*(sums[t]||0)/(denominator==='selected'?selectedTotal:total):null);
+  }
+  const A=aTaxa.reduce((n,t)=>n+(sums[t]||0),0),B=bTaxa.reduce((n,t)=>n+(sums[t]||0),0);
+  const calc=(x,y)=>measure==='share'?(x+y?100*x/(x+y):null):(y?x/y:null);
+  let values=[];
+  for(const u of units){const x=aTaxa.reduce((s,t)=>s+(u.counts[t]||0),0),y=bTaxa.reduce((s,t)=>s+(u.counts[t]||0),0);const v=calc(x,y);if(v!==null)values.push(v);}
+  const ratio=method==='pooled'?calc(A,B):(values.length?values.reduce((x,y)=>x+y,0)/values.length:null);
+  const sites=new Map();for(const u of units){const old=sites.get(u.site)||{site:u.site,nisp:0,units:0};old.nisp+=u.total;old.units++;sites.set(u.site,old);}
+  results.push({id:cohort.id||'',name:cohort.label||'Untitled group',filters:cohort.filters||{},rows:subset.length,units:units.length,sites:sites.size,siteContributions:[...sites.values()].sort((a,b)=>b.nisp-a.nisp||a.site.localeCompare(b.site)),total,totalSelected:selectedTotal,sums,pct,contributors,A,B,ratio,ratioEligible:values.length,unitIds:units.map(u=>u.id)});
+ }
+ const overlaps=[];for(let i=0;i<results.length;i++)for(let j=i+1;j<results.length;j++){const ids=new Set(results[i].unitIds);const n=results[j].unitIds.filter(id=>ids.has(id)).length;if(n)overlaps.push({a:results[i].name,b:results[j].name,units:n});}
+ return {results,overlaps,taxa,aTaxa,bTaxa,method,denominator,measure};
+}
+
 function csvExportRows(rows){return rows.map(r=>({...r,latitude:r.latitude??'',longitude:r.longitude??'',startYear:r.startYear??'',endYear:r.endYear??''}));}
 function diagnostics(rows){const units=unitize(rows);const labelSet=new Set(rows.map(r=>r.taxon));const bySite=new Map();for(const r of rows){let s=r.site;if(!bySite.has(s))bySite.set(s,new Set());bySite.get(s).add(r.taxon)}return {rows:rows.length,units:units.length,sites:new Set(rows.map(r=>r.site)).size,countries:new Set(rows.map(r=>r.country)).size,regions:new Set(rows.map(r=>r.region)).size,periods:new Set(rows.map(r=>r.period)).size,taxa:labelSet.size,nisp:rows.reduce((a,r)=>a+r.nisp,0),zeroRows:rows.filter(r=>r.nisp===0).length,nonzeroTaxa:labelSet.size,missingCountries:rows.filter(r=>r.country==='Not specified').length,missingPeriods:rows.filter(r=>r.period==='Undated').length};}
-return {PERIODS,COLORS,canonicalTaxon,parseCSV,toCSV,normalize,num,unitKey,unitize,filterRows,orderPeriods,aggregate,ratio,timeSeries,csvExportRows,diagnostics};
+return {PERIODS,COLORS,canonicalTaxon,parseCSV,toCSV,normalize,num,unitKey,unitize,filterRows,orderPeriods,aggregate,ratio,timeSeries,csvExportRows,diagnostics,FACETS,matchCohort,cohortRows,analyzeCohorts};
 });
