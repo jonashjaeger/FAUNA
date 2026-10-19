@@ -1,4 +1,4 @@
-/* FAUNA v1.2 — client-only comparative NISP workspace */
+/* FAUNA v1.2.1 — georeferencing improvements, prior-dataset migration */
 (()=>{'use strict';
 const E=window.FaunaEngine,$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const PAGE={map:['Map Explorer','Explore geographically referenced assemblages and select sites for comparison.'],lab:['Visualisation Lab','Design linked figures for comparative zooarchaeological analysis.'],studio:['Comparison Studio','Build your own groups and compare species across places and periods.'],overview:['Overview','Compare species composition across your assemblages.'],composition:['Taxonomic composition','Compare raw counts and relative abundance across analytical scales.'],ratios:['Species ratios','Contrast two taxa without merging ambiguous identifications.'],time:['Change over time','Track taxonomic proportions through explicitly ordered archaeological periods.'],geography:['Regional comparisons','Compare geographic groups and inspect variation within each group.'],records:['Assemblage table','Review the contributions behind every comparison and export the filtered data.'],taxonomy:['Taxonomy mapping','Audit and edit the harmonisation of original identifications.'],methods:['Methods and limitations','How FAUNA calculates its statistics, and what the results cannot demonstrate.']};
@@ -16,6 +16,31 @@ function saveSoon(){const el=$('#saveStatus');if(el)el.textContent='Saving…';c
 function openDB(){return new Promise((resolve,reject)=>{if(!window.indexedDB)return reject(Error('IndexedDB unavailable'));const req=indexedDB.open('fauna-db',1);req.onupgradeneeded=()=>{req.result.createObjectStore('app')};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function saveState(){try{if(db){await new Promise((resolve,reject)=>{const txn=db.transaction('app','readwrite');txn.objectStore('app').put(state,'workspace');txn.oncomplete=resolve;txn.onerror=()=>reject(txn.error);});}else localStorage.setItem('fauna-workspace',JSON.stringify(state));$('#saveStatus').textContent='Saved locally';}catch(e){$('#saveStatus').textContent='Storage problem';toast('Could not save; export a JSON backup before closing.');}}
 async function loadState(){try{db=await openDB();const saved=await new Promise((resolve,reject)=>{const tx=db.transaction('app');const req=tx.objectStore('app').get('workspace');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});if(saved&&Array.isArray(saved.rows)){state={...clone(BASE),...saved,map:{...BASE.map,...saved.map},lab:{...BASE.lab,...saved.lab},filters:{...BASE.filters,...saved.filters}};return;}}catch(e){db=null;try{let v=JSON.parse(localStorage.getItem('fauna-workspace'));if(v&&Array.isArray(v.rows)){state={...clone(BASE),...v,map:{...BASE.map,...v.map},lab:{...BASE.lab,...v.lab},filters:{...BASE.filters,...v.filters}};return;}}catch(_) {}}demoLoad(false);}
+/* Legacy FAUNA v1.0/v1.1 demo migration. This never changes real datasets. */
+const DEMO_LOCATIONS={
+ 'Tissø (demo)': [55.573,11.257], 'Bejsebakken (demo)': [57.030,9.897],
+ 'Odense area (demo)': [55.396,10.389], 'Lund area (demo)': [55.705,13.195],
+ 'Falbygden (demo)': [58.153,13.645], 'Haithabu area (demo)': [54.491,9.566]
+};
+/* Separate illustrative sites from the downloadable older example spreadsheet. */
+const EXAMPLE_LOCATIONS={
+ 'Example A':[55.668,12.080], 'Example B':[56.233,10.129],
+ 'Example C':[55.600,13.050], 'Example D':[54.565,9.760]
+};
+function validCoordinates(lat,lon){return typeof lat==='number'&&typeof lon==='number'&&Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180&&!(lat===0&&lon===0);}
+function demoLocation(site){return DEMO_LOCATIONS[site]||EXAMPLE_LOCATIONS[site]||null;}
+function isIllustrativeRow(row){return /SYNTHETIC DEMO|SYNTHETIC DEMONSTRATION|NOT ARCHAEOLOGICAL DATA/i.test(String(row.source||''));}
+function recoverLegacyDemoLocations(){
+ let repaired=0;
+ for(const r of state.rows){
+  const place=demoLocation(r.site);
+  if(place && isIllustrativeRow(r) && !validCoordinates(r.latitude,r.longitude)){
+   r.latitude=place[0];r.longitude=place[1];repaired++;
+  }
+ }
+ if(repaired){state.importWarnings=[...new Set([...(state.importWarnings||[]),'Illustrative coordinates added to older synthetic demonstration records (not archaeological site measurements).'])];saveSoon();}
+ return repaired;
+}
 function demoLoad(repaint=true){const countries=[['Denmark','Zealand'],['Denmark','Jutland'],['Denmark','Funen'],['Sweden','Scania'],['Sweden','Västergötland'],['Germany','Schleswig-Holstein']];const times=['Early Iron Age','Late Iron Age','Viking Age','Medieval'];const taxa=['Sheep','Goat','Sheep/goat','Cattle','Pig','Horse'];const rows=[];for(let i=0;i<countries.length;i++){for(let p=0;p<times.length;p++){const [country,region]=countries[i];const counts=[38+13*p+((i*7+p*3)%22),4+(i+p)%7,24+((p*7+i*3)%23),85-(p*10)+i*6,52+(i*7+p*4)%35,7+(i+p*3)%11];const site=['Tissø (demo)','Bejsebakken (demo)','Odense area (demo)','Lund area (demo)','Falbygden (demo)','Haithabu area (demo)'][i];taxa.forEach((t,k)=>rows.push({site,assemblage:'',country,region,period:times[p],context:'',source:'SYNTHETIC DEMONSTRATION — NOT ARCHAEOLOGICAL DATA',taxonRaw:t,taxon:t,nisp:Math.max(0,counts[k]),latitude:[55.573,57.03,55.396,55.705,58.153,54.491][i],longitude:[11.257,9.897,10.389,13.195,13.645,9.566][i],startYear:null,endYear:null}));}}
  state={...clone(BASE),rows,demo:true,projectName:'Illustrative demonstration'};if(repaint){render();saveSoon()}}
 function filtered(){return E.filterRows(state.rows,state.filters)}
@@ -55,6 +80,51 @@ function introCards(){return `<div class="feature-grid"><div class="card feature
    them remain available in the non-spatial modules. No basemap network requests. */
 const mapProjection=([lon,lat])=>[lon*.64,-lat];
 function eligiblePoint(u){return Number.isFinite(u.latitude)&&Number.isFinite(u.longitude)&&Math.abs(u.latitude)<=90&&Math.abs(u.longitude)<=180&& !(u.latitude===0&&u.longitude===0);}
+function missingCoordinateGroups(){
+ const groups=new Map();
+ for(const u of E.unitize(filtered())){
+  if(eligiblePoint(u))continue;
+  const key=JSON.stringify([u.site,u.country]);
+  if(!groups.has(key))groups.set(key,{key,site:u.site,country:u.country,region:u.region,units:0,nisp:0});
+  const g=groups.get(key);g.units++;g.nisp+=u.total;
+ }
+ return [...groups.values()].sort((a,b)=>a.site.localeCompare(b.site));
+}
+function parseCoordinate(input){
+ const str=String(input??'').trim().replace(',','.');
+ if(!str)return null;
+ const n=Number(str);
+ return Number.isFinite(n)?n:null;
+}
+function applyCoordinates(){
+ const picker=$('#mapCoordinateSite'),latInput=$('#mapLatitude'),lonInput=$('#mapLongitude');
+ if(!picker||!latInput||!lonInput)return;
+ let identity;
+ try{identity=JSON.parse(picker.value)}catch(_){return toast('Choose a site first.');}
+ const lat=parseCoordinate(latInput.value),lon=parseCoordinate(lonInput.value);
+ if(!validCoordinates(lat,lon))return toast('Enter valid decimal latitude (−90 to 90) and longitude (−180 to 180).');
+ const [site,country]=identity;
+ let changed=0;
+ for(const r of state.rows){if(r.site===site&&r.country===country){
+  // Location is site-level: all phases and taxon rows receive this one position.
+  if(!validCoordinates(r.latitude,r.longitude)||r.latitude!==lat||r.longitude!==lon){r.latitude=lat;r.longitude=lon;changed++;}
+ }}
+ if(!changed)return toast('This site already uses these coordinates.');
+ state.map.focus=site+'|'+country;
+ render();saveSoon();toast(`Saved coordinates for ${site} (${changed} NISP records).`);
+}
+function useLegacyDemoLocations(){
+ const n=recoverLegacyDemoLocations();render();if(n)toast(`Recovered coordinates for ${n} illustrative records.`);else toast('No missing illustrative coordinates could be recovered.');
+}
+function coordinateEditor(noCoords){
+ if(!noCoords)return '';
+ const missing=missingCoordinateGroups();
+ const examples=missing.filter(g=>state.rows.some(r=>r.site===g.site&&r.country===g.country&&isIllustrativeRow(r)&&demoLocation(r.site)));
+ return `<section class="card coord-repair" aria-label="Repair missing site coordinates"><div class="coord-heading"><div><span class="eyebrow">GEOGRAPHIC DATA CHECK</span><h2 class="card-title">${noCoords} assemblage${noCoords===1?'':'s'} have no usable coordinates</h2><p class="small-copy">The map only plots records with latitude and longitude. Add a location here without re-importing your NISP data. Coordinates are saved across every phase and taxon belonging to that site.</p></div><span class="coord-count">${missing.length} sites</span></div>
+ ${examples.length?`<div class="callout warning coord-example-note">Some missing sites belong to the synthetic example data. <button class="button small" data-action="map-recover-demo" type="button">Restore demo coordinates</button><span>Approximate demonstration positions only.</span></div>`:''}
+ <div class="coord-edit-row"><div class="control"><label for="mapCoordinateSite">Site to georeference</label><select id="mapCoordinateSite">${missing.map(g=>`<option value="${esc(g.key)}">${esc(g.site)} (${esc(g.country)}) · ${g.units} assemblage${g.units===1?'':'s'}</option>`).join('')}</select></div><div class="control coord-number"><label for="mapLatitude">Latitude (N/S)</label><input id="mapLatitude" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 55.572972" /></div><div class="control coord-number"><label for="mapLongitude">Longitude (E/W)</label><input id="mapLongitude" type="text" inputmode="decimal" autocomplete="off" placeholder="e.g. 11.258275" /></div><button class="button button-primary" type="button" data-action="map-coordinate-save">Save location</button></div>
+ <p class="small-copy coord-foot">Use signed decimal degrees (W/S negative); both comma and dot decimals are accepted. Locations are not looked up or inferred automatically for real archaeological sites. Export a JSON backup to retain your corrections.</p></section>`;
+}
 function mapSiteGroups(){
  const units=E.unitize(filtered()),groups=new Map();
  for(const u of units){if(!eligiblePoint(u))continue;
@@ -93,7 +163,7 @@ async function mapExport(kind){const svg=$('#faunaGeoMap');if(!svg){toast('Open 
 function mapToStudio(){const sites=state.map.selectedSites||[];if(!sites.length)return toast('Select at least one site on the map first.');ensureCustom();if(state.custom.cohorts.length>=8)return toast('Comparison Studio supports up to eight groups. Remove a group first.');let f={site:sites};for(const k of ['country','region','period'])if(state.filters[k])f[k]=[state.filters[k]];state.custom.cohorts.push(newCohort(`Map selection (${sites.length} sites)`,f));activeView='studio';render();saveSoon();toast('Map selection added as a new comparison group.');}
 function renderMap(){const points=mapSiteGroups(),d=E.diagnostics(filtered()),available=new Set(taxa()),chosen=available.has(state.map.taxon)?state.map.taxon:taxa()[0],noCoords=E.unitize(filtered()).filter(u=>!eligiblePoint(u)).length;
  state.map.taxon=chosen;const focus=points.find(p=>p.id===state.map.focus)||points.find(p=>(state.map.selectedSites||[]).includes(p.site));const picks=state.map.selectedSites||[];
- return heading('map',`<button class="button button-primary" data-action="navigate" data-target="lab">Open Visualisation Lab →</button>`)+alerts()+filterControls()+`<section class="card filter-panel"><div class="toolbar"><div class="control"><label>Taxon to display</label><select data-map-setting="taxon">${options(taxa(),chosen)}</select></div><div class="control"><label>Symbol encoding</label><select data-map-setting="marker">${options(['taxon','size'],state.map.marker)}</select></div><div class="control"><label>Selected sites</label><span class="map-selected-count">${picks.length} site${picks.length===1?'':'s'}</span></div><button class="button" data-action="map-clear">Clear selection</button><button class="button button-primary" data-action="map-to-studio">Compare selected sites →</button></div></section>
+ return heading('map',`<button class="button button-primary" data-action="navigate" data-target="lab">Open Visualisation Lab →</button>`)+alerts()+filterControls()+coordinateEditor(noCoords)+`${points.length===0?'<div class="callout warning map-empty-message">No sites can be plotted with the current coordinates and filters. Use the coordinate editor above, or open the georeferenced demo dataset.</div>':''}<section class="card filter-panel"><div class="toolbar"><div class="control"><label>Taxon to display</label><select data-map-setting="taxon">${options(taxa(),chosen)}</select></div><div class="control"><label>Symbol encoding</label><select data-map-setting="marker">${options(['taxon','size'],state.map.marker)}</select></div><div class="control"><label>Selected sites</label><span class="map-selected-count">${picks.length} site${picks.length===1?'':'s'}</span></div><button class="button" data-action="map-clear">Clear selection</button><button class="button button-primary" data-action="map-to-studio">Compare selected sites →</button></div></section>
  <div class="map-layout"><section class="card map-panel"><div class="map-tools"><span class="map-overline">OFFLINE GEOGRAPHIC REFERENCE MAP</span><div><button class="button small" data-action="map-zoom" data-factor="1.5" aria-label="Zoom in">＋</button><button class="button small" data-action="map-zoom" data-factor="0.6666667" aria-label="Zoom out">−</button><button class="button small" data-action="map-reset">Fit sites</button><button class="button small" data-action="map-svg-export">SVG</button><button class="button small" data-action="map-png-export">PNG</button></div></div><div class="geo-map-frame">${mapSVG(points)}</div><div class="map-footer"><span>● ${state.map.marker==='size'?'Marker size shows total NISP':'Colour shows selected taxon as % of all recorded NISP'}</span><span>${fmt(points.length)} mapped sites · ${fmt(noCoords)} units without coordinates</span></div>${state.map.marker==='taxon'?'<div class="map-spectrum"><span>0%</span><i></i><span>100%</span></div>':''}</section>
  <aside class="map-sidebar"><section class="card card-pad"><span class="eyebrow">LOCATION DETAILS</span>${focus?`<h2 class="map-focus-title">${esc(focus.site)}</h2><p class="small-copy">${esc(focus.region)} · ${esc(focus.country)} · ${focus.lat.toFixed(5)}° N, ${focus.lon.toFixed(5)}° E</p><div class="map-facts"><div><strong>${fmt(focus.total)}</strong><small>Total NISP</small></div><div><strong>${fmt(focus.units)}</strong><small>Assemblages</small></div><div><strong>${fmt(focus.counts[chosen]||0)}</strong><small>${esc(chosen)} NISP</small></div></div><p class="small-copy">Periods: ${esc(focus.periods.join(' · '))}</p><div class="map-mini-taxa">${Object.entries(focus.counts).sort((a,b)=>b[1]-a[1]).map(([t,n])=>`<div><span>${esc(t)}</span><strong>${fmt(n)}</strong></div>`).join('')}</div><p class="small-copy">Sources: ${esc(focus.sources.slice(0,3).join('; ')||'Not specified')}</p>`:`<p class="small-copy">Tap any site marker to select it and inspect its assemblages.</p>`}</section><section class="card card-pad"><h3 class="card-title">Create a geographic comparison</h3><p class="small-copy">Tap markers to build a site selection. Send it to Comparison Studio as its own group, including any active country/region/period filters.</p><div class="input-row"><button class="button button-primary" data-action="map-to-studio">Compare ${picks.length} sites</button><button class="button" data-action="map-to-lab">Chart selected sites</button></div><p class="small-copy">This map is a local coastline reference, not a precise archaeological survey map. Overlapping assemblages share a site marker. Missing coordinates remain in all non-map analyses.</p></section></aside></div>`;
 }
@@ -189,7 +259,7 @@ function applyTaxonomy(){const cross={...state.mappings};$$('[data-mapping]').fo
 function askRestore(){const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=async()=>{if(inp.files[0]){openImport={phase:0,parsed:null,format:'long',mapping:{},fileName:'',mode:'replace'};try{await parseFile(inp.files[0])}catch(e){toast(e.message)}}};inp.click();}
 async function processFile(file){if(!file)return;try{await parseFile(file);}catch(e){console.error(e);toast(`Import error: ${e.message}`);}}
 function actions(){document.addEventListener('click',async e=>{const el=e.target.closest('[data-view],[data-action],[data-taxon],[data-format]');if(el?.dataset.view){navigate(el.dataset.view);return}if(el?.dataset.taxon){const t=el.dataset.taxon;if(state.selectedTaxa.includes(t))state.selectedTaxa=state.selectedTaxa.filter(x=>x!==t);else state.selectedTaxa.push(t);render();saveSoon();return}if(el?.dataset.format&&openImport){openImport.format=el.dataset.format;renderImportModal();return}if(!el?.dataset.action)return;const action=el.dataset.action;try{switch(action){case 'navigate':navigate(el.dataset.target);break;
-case 'map-to-lab':state.lab.useMap=true;activeView='lab';render();saveSoon();break;case 'map-svg-export':mapExport('svg');break;case 'map-png-export':await mapExport('png');break;case 'map-pick':mapPick(el.dataset.site);break;case 'map-clear':state.map.selectedSites=[];state.map.focus='';render();saveSoon();break;case 'map-to-studio':mapToStudio();break;case 'map-zoom':state.map.zoom=Math.min(8,Math.max(.6,(state.map.zoom||1)*Number(el.dataset.factor||1)));render();saveSoon();break;case 'map-reset':state.map.zoom=1;state.map.center=null;render();saveSoon();break;case 'studio-add':ensureCustom();if(state.custom.cohorts.length<8){state.custom.cohorts.push(newCohort(`Group ${state.custom.cohorts.length+1}`));render();saveSoon();}break;
+case 'map-coordinate-save':applyCoordinates();break;case 'map-recover-demo':useLegacyDemoLocations();break;case 'map-to-lab':state.lab.useMap=true;activeView='lab';render();saveSoon();break;case 'map-svg-export':mapExport('svg');break;case 'map-png-export':await mapExport('png');break;case 'map-pick':mapPick(el.dataset.site);break;case 'map-clear':state.map.selectedSites=[];state.map.focus='';render();saveSoon();break;case 'map-to-studio':mapToStudio();break;case 'map-zoom':state.map.zoom=Math.min(8,Math.max(.6,(state.map.zoom||1)*Number(el.dataset.factor||1)));render();saveSoon();break;case 'map-reset':state.map.zoom=1;state.map.center=null;render();saveSoon();break;case 'studio-add':ensureCustom();if(state.custom.cohorts.length<8){state.custom.cohorts.push(newCohort(`Group ${state.custom.cohorts.length+1}`));render();saveSoon();}break;
 case 'studio-remove':ensureCustom();if(state.custom.cohorts.length>2){state.custom.cohorts=state.custom.cohorts.filter(x=>x.id!==el.dataset.id);render();saveSoon();}break;
 case 'studio-quick':studioQuick();break;
 case 'studio-export':studioExport();break;
@@ -207,7 +277,7 @@ if(el.dataset.state){const key=el.dataset.state;state[key]=el.value;render();sav
  document.addEventListener('input',e=>{const el=e.target;if(el.dataset.facetSearch){const lookup=el.dataset.facetSearch,container=document.querySelector(`[data-facet-values="${lookup}"]`);if(container){const term=el.value.trim().toLowerCase();container.querySelectorAll('[data-search-text]').forEach(item=>{item.hidden=!item.dataset.searchText.includes(term);});}}});
  document.addEventListener('click',e=>{if(e.target.closest('#dropzone')&&e.target.id!=='fileInput')$('#fileInput')?.click();});document.addEventListener('keydown',e=>{if(e.target.closest?.('.map-marker')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();mapPick(e.target.closest('.map-marker').dataset.site);return;}if(e.target.id==='dropzone'&&(e.key==='Enter'||e.key===' ')){$('#fileInput')?.click();e.preventDefault();}if(e.key==='Escape'&&openImport)closeModal()});document.addEventListener('dragover',e=>{if(e.target.closest('#dropzone'))e.preventDefault()});document.addEventListener('drop',e=>{if(e.target.closest('#dropzone')){e.preventDefault();processFile(e.dataTransfer.files[0]);}});
  $('#menuButton').addEventListener('click',()=>$('#sidebar').classList.toggle('open'));$('#importBtn').addEventListener('click',importModal);$('#backupBtn').addEventListener('click',backup);$('#reloadUpdate').addEventListener('click',()=>location.reload());}
-async function init(){actions();await loadState();state.rows=state.rows.map(r=>({...r,taxon:state.mappings?.[r.taxonRaw]||E.canonicalTaxon(r.taxonRaw||r.taxon)}));const hash=location.hash.replace('#','');if(PAGE[hash])activeView=hash;render();if('serviceWorker'in navigator&&location.protocol!=='file:'){try{const reg=await navigator.serviceWorker.register('./sw.js');reg.addEventListener('updatefound',()=>{const worker=reg.installing;if(worker)worker.addEventListener('statechange',()=>{if(worker.state==='installed'&&navigator.serviceWorker.controller)$('#updateBanner').hidden=false;});});}catch(e){console.warn('Offline caching unavailable:',e);}}
- window.FAUNA_DEBUG={getState:()=>clone(state),navigate,unitize:E.unitize,normalize:E.normalize, mapSites:()=>mapSiteGroups(),labData:()=>labGroups()};}
+async function init(){actions();await loadState();state.rows=state.rows.map(r=>({...r,taxon:state.mappings?.[r.taxonRaw]||E.canonicalTaxon(r.taxonRaw||r.taxon)}));recoverLegacyDemoLocations();const hash=location.hash.replace('#','');if(PAGE[hash])activeView=hash;render();if('serviceWorker'in navigator&&location.protocol!=='file:'){try{const reg=await navigator.serviceWorker.register('./sw.js');reg.addEventListener('updatefound',()=>{const worker=reg.installing;if(worker)worker.addEventListener('statechange',()=>{if(worker.state==='installed'&&navigator.serviceWorker.controller)$('#updateBanner').hidden=false;});});}catch(e){console.warn('Offline caching unavailable:',e);}}
+ window.FAUNA_DEBUG={getState:()=>clone(state),navigate,unitize:E.unitize,normalize:E.normalize, mapSites:()=>mapSiteGroups(),missingLocations:()=>missingCoordinateGroups(),labData:()=>labGroups()};}
 init();
 })();

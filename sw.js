@@ -1,4 +1,4 @@
-const CACHE = 'fauna-core-v1.2.0';
+const CACHE = 'fauna-core-v1.2.1';
 const FILES = ['./','./index.html','./styles.css','./engine.js','./coastline.js','./xlsx-lite.js','./app.js','./manifest.webmanifest','./icons/icon.svg','./icons/icon-192.png','./icons/icon-512.png','./examples/illustrative_nisp.csv'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(Promise.all([caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('fauna-')&&k!==CACHE).map(k=>caches.delete(k)))),self.clients.claim()])));
