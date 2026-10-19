@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#17362f" />
+  <meta name="description" content="FAUNA — an offline-first comparative zooarchaeology workspace for NISP datasets." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="styles.css?v=1.0.0" />
+  <title>FAUNA | Comparative Zooarchaeology</title>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <a class="brand" href="#overview" aria-label="FAUNA home"><span class="brand-mark"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M10 32V16m9 16V10m9 22V19m9 13V13" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M7 37h34" stroke="currentColor" stroke-width="2"/></svg></span><span><strong>FAUNA</strong><small>COMPARATIVE ZOOARCHAEOLOGY</small></span></a>
+    <div class="sidebar-group-label">WORKSPACE</div>
+    <nav id="nav" aria-label="Primary navigation">
+      <button data-view="overview" class="nav-button active"><span class="nav-symbol">◫</span> Overview</button>
+      <button data-view="composition" class="nav-button"><span class="nav-symbol">▥</span> Composition</button>
+      <button data-view="ratios" class="nav-button"><span class="nav-symbol">↔</span> Species ratios</button>
+      <button data-view="time" class="nav-button"><span class="nav-symbol">⌁</span> Change over time</button>
+      <button data-view="geography" class="nav-button"><span class="nav-symbol">▦</span> Regional comparisons</button>
+      <button data-view="records" class="nav-button"><span class="nav-symbol">☷</span> Assemblage table</button>
+    </nav>
+    <div class="sidebar-group-label second">DATA & METHODS</div>
+    <nav>
+      <button data-view="taxonomy" class="nav-button"><span class="nav-symbol">⩘</span> Taxonomy mapping</button>
+      <button data-view="methods" class="nav-button"><span class="nav-symbol">ⓘ</span> Methodology</button>
+    </nav>
+    <div class="sidebar-footer"><span class="status-led"></span> Local-first workspace <small>FAUNA v1.0 · Research prototype</small></div>
+  </aside>
+  <div class="main-column">
+    <header class="topbar">
+      <div class="topbar-left"><button id="menuButton" class="icon-button mobile-only" aria-label="Toggle navigation">☰</button><span class="breadcrumb">RESEARCH WORKSPACE <span>/</span> <strong id="breadcrumbCurrent">Overview</strong></span></div>
+      <div class="topbar-actions"><span class="storage-status" id="saveStatus">Saved locally</span><button class="button button-ghost compact" id="backupBtn">Export backup</button><button class="button button-primary compact" id="importBtn"><span>＋</span> Import dataset</button></div>
+    </header>
+    <main id="mainContent" tabindex="-1"></main>
+    <footer class="footer">FAUNA · Comparative NISP analysis <span>Observed NISP ≠ numbers of animals · Taxonomic ambiguity is retained</span></footer>
+  </div>
+</div>
+<div id="modalRoot"></div>
+<div id="toast" class="toast" aria-live="polite"></div>
+<div id="updateBanner" class="update-banner" hidden><span>New version available.</span><button id="reloadUpdate" class="button button-primary compact">Reload FAUNA</button></div>
+<script src="engine.js?v=1.0.0"></script>
+<script src="xlsx-lite.js?v=1.0.0"></script>
+<script src="app.js?v=1.0.0"></script>
+</body>
+</html>
