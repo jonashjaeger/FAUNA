@@ -8,7 +8,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=1.2.1" />
+  <link rel="stylesheet" href="styles.css?v=1.3.0" />
   <title>FAUNA | Comparative Zooarchaeology</title>
 </head>
 <body>
@@ -19,6 +19,7 @@
     <nav id="nav" aria-label="Primary navigation">
       <button data-view="overview" class="nav-button active"><span class="nav-symbol">◫</span> Overview</button>
       <button data-view="map" class="nav-button"><span class="nav-symbol">⌖</span> Map Explorer <span class="studio-new">NEW</span></button>
+      <button data-view="analysis" class="nav-button"><span class="nav-symbol">◌</span> Comparative Analysis <span class="studio-new">NEW</span></button>
       <button data-view="lab" class="nav-button"><span class="nav-symbol">▧</span> Visualisation Lab <span class="studio-new">NEW</span></button>
       <button data-view="studio" class="nav-button"><span class="nav-symbol">⚑</span> Comparison Studio <span class="studio-new">NEW</span></button>
       <button data-view="composition" class="nav-button"><span class="nav-symbol">▥</span> Composition</button>
@@ -32,7 +33,7 @@
       <button data-view="taxonomy" class="nav-button"><span class="nav-symbol">⩘</span> Taxonomy mapping</button>
       <button data-view="methods" class="nav-button"><span class="nav-symbol">ⓘ</span> Methodology</button>
     </nav>
-    <div class="sidebar-footer"><span class="status-led"></span> Local-first workspace <small>FAUNA v1.2.2 · Research prototype</small></div>
+    <div class="sidebar-footer"><span class="status-led"></span> Local-first workspace <small>FAUNA v1.3.0 · Research prototype</small></div>
   </aside>
   <div class="main-column">
     <header class="topbar">
@@ -46,9 +47,10 @@
 <div id="modalRoot"></div>
 <div id="toast" class="toast" aria-live="polite"></div>
 <div id="updateBanner" class="update-banner" hidden><span>New version available.</span><button id="reloadUpdate" class="button button-primary compact">Reload FAUNA</button></div>
-<script src="coastline.js?v=1.2.1"></script>
-<script src="engine.js?v=1.2.1"></script>
-<script src="xlsx-lite.js?v=1.2.1"></script>
-<script src="app.js?v=1.2.1"></script>
+<script src="coastline.js?v=1.3.0"></script>
+<script src="engine.js?v=1.3.0"></script>
+<script src="xlsx-lite.js?v=1.3.0"></script>
+<script src="distribution.js?v=1.3.0"></script>
+<script src="app.js?v=1.3.0"></script>
 </body>
 </html>

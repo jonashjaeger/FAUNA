@@ -30,3 +30,6 @@
 .coord-foot{margin:12px 0 0;font-size:11px}
 .map-empty-message{margin:0 0 18px}
 @media(max-width:680px){.coord-repair{padding:18px 15px}.coord-edit-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.coord-edit-row .control:first-child{grid-column:1/-1}.coord-edit-row .button{grid-column:1/-1}.coord-heading{align-items:start}}
+
+/* v1.3 Comparative Analysis Lab */
+.analysis-settings{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin:16px 0}.analysis-settings input{width:100%;min-width:0}.analysis-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}.analysis-kpis .kpi{padding:17px}.analysis-kpis .kpi strong{font-size:25px}.warning-cell{color:#a44c23;font-weight:850}.analysis-settings .control{min-width:0}.analysis-settings select{width:100%}@media(max-width:1000px){.analysis-settings{grid-template-columns:repeat(2,minmax(0,1fr))}.analysis-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:610px){.analysis-settings{grid-template-columns:1fr}.analysis-kpis .kpi strong{font-size:23px}.analysis-kpis{gap:8px}.analysis-kpis .kpi{padding:13px}}
